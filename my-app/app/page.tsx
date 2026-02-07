@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 // Define document file interface
 interface DocumentFile {
@@ -13,31 +14,46 @@ interface DocumentFile {
   status: 'processing' | 'ready' | 'error';
 }
 
-// Mock initial data
-const MOCK_FILES: DocumentFile[] = [
-  {
-    id: '1',
-    name: 'Q1_Financial_Report.pdf',
-    type: 'pdf',
-    url: '#',
-    uploadDate: '2023-10-27',
-    summary: 'This document covers the Q1 financial results, highlighting a 15% growth in revenue driven by new product launches. Operating expenses increased by 5% due to marketing initiatives.',
-    status: 'ready'
-  },
-  {
-    id: '2',
-    name: 'Product_Demo.mp4',
-    type: 'video',
-    url: '#',
-    uploadDate: '2023-10-28',
-    status: 'processing'
-  }
-];
-
 export default function Home() {
-  const [files, setFiles] = useState<DocumentFile[]>(MOCK_FILES);
+  const [files, setFiles] = useState<DocumentFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<DocumentFile | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // Fetch file list from Supabase
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+
+  const fetchFiles = async () => {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching files:', error);
+    } else if (data) {
+      const formattedFiles: DocumentFile[] = data.map((item: {
+        id: string;
+        name: string;
+        type: 'pdf' | 'video';
+        url: string;
+        created_at: string;
+        summary?: string;
+        status: 'processing' | 'ready' | 'error';
+      }) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        url: item.url,
+        uploadDate: new Date(item.created_at).toLocaleDateString(),
+        summary: item.summary,
+        status: item.status,
+      }));
+      setFiles(formattedFiles);
+    }
+  };
 
   // Handle file selection
   const handleFileSelect = (file: DocumentFile) => {
@@ -55,17 +71,76 @@ export default function Home() {
     setIsDragging(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    // Logic for actual upload will be implemented here
-    alert('File dropped (Upload not implemented yet)');
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      await uploadFile(file);
+    }
   };
 
-  // Simulate click upload
+  // Handle click upload
   const handleUploadClick = () => {
-    // This will trigger hidden input in the future
-    alert('Click upload (Not implemented yet)');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,video/mp4';
+    input.onchange = async (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.files && target.files.length > 0) {
+        await uploadFile(target.files[0]);
+      }
+    };
+    input.click();
+  };
+
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // 1. Upload to Supabase Storage
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, file);
+
+      if (storageError) throw storageError;
+
+      // 2. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(filePath);
+
+      // 3. Insert into Database
+      const fileType = file.type.includes('pdf') ? 'pdf' : 'video';
+      const { data: dbData, error: dbError } = await supabase
+        .from('documents')
+        .insert([
+          {
+            name: file.name,
+            type: fileType,
+            url: publicUrl,
+            status: 'processing', // Initial status
+            summary: '',
+          },
+        ])
+        .select();
+
+      if (dbError) throw dbError;
+
+      // Refresh file list
+      await fetchFiles();
+      alert('Upload successful!');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Upload failed:', errorMessage);
+      alert('Upload failed: ' + errorMessage);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -84,20 +159,25 @@ export default function Home() {
         {/* Upload area */}
         <div className="p-4">
           <div 
-            onClick={handleUploadClick}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            onClick={!uploading ? handleUploadClick : undefined}
+            onDragOver={!uploading ? handleDragOver : undefined}
+            onDragLeave={!uploading ? handleDragLeave : undefined}
+            onDrop={!uploading ? handleDrop : undefined}
             className={`
               border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200
               ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}
+              ${uploading ? 'opacity-50 cursor-not-allowed' : ''}
             `}
           >
             <div className="flex flex-col items-center gap-2">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <span className="text-sm font-medium text-gray-600">Upload file or video</span>
+              {uploading ? (
+                 <svg className="w-8 h-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              ) : (
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              )}
+              <span className="text-sm font-medium text-gray-600">{uploading ? 'Uploading...' : 'Upload file or video'}</span>
               <span className="text-xs text-gray-400">Supports PDF, MP4</span>
             </div>
           </div>
@@ -152,7 +232,10 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm">
+                <button 
+                  onClick={() => window.open(selectedFile.url, '_blank')}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm"
+                >
                   Download
                 </button>
                 <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2">
@@ -166,17 +249,24 @@ export default function Home() {
             <div className="flex-1 flex overflow-hidden">
               {/* File preview area (Left) */}
               <div className="flex-1 bg-gray-100 p-6 overflow-y-auto border-r border-gray-200 flex items-center justify-center">
-                <div className="bg-white shadow-lg rounded-lg w-full max-w-3xl h-full min-h-[500px] flex items-center justify-center text-gray-400">
-                  {/* PDF Viewer or Video Player will be placed here */}
-                  <div className="text-center">
-                    {selectedFile.type === 'pdf' ? (
-                      <svg className="w-20 h-20 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    ) : (
-                      <svg className="w-20 h-20 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    )}
-                    <p className="text-lg font-medium">File Preview</p>
-                    <p className="text-sm text-gray-400 mt-1">{selectedFile.name}</p>
-                  </div>
+                <div className="bg-white shadow-lg rounded-lg w-full max-w-4xl h-full flex flex-col overflow-hidden">
+                  {selectedFile.type === 'pdf' ? (
+                     <iframe 
+                       src={selectedFile.url} 
+                       className="w-full h-full border-none"
+                       title={selectedFile.name}
+                     />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-black">
+                      <video 
+                        src={selectedFile.url} 
+                        className="w-full h-full max-h-full" 
+                        controls 
+                      >
+                        Your browser does not support the video tag.
+                      </video>
+                    </div>
+                  )}
                 </div>
               </div>
 
