@@ -3,9 +3,10 @@ import { DocumentFile } from '../lib/types';
 
 interface MainContentProps {
   selectedFile: DocumentFile | null;
+  onGenerateSummary: (file: DocumentFile) => Promise<void>;
 }
 
-export default function MainContent({ selectedFile }: MainContentProps) {
+export default function MainContent({ selectedFile, onGenerateSummary }: MainContentProps) {
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
       {selectedFile ? (
@@ -27,9 +28,13 @@ export default function MainContent({ selectedFile }: MainContentProps) {
               >
                 Download
               </button>
-              <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2">
+              <button 
+                onClick={() => onGenerateSummary(selectedFile)}
+                disabled={selectedFile.status === 'processing'}
+                className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 ${selectedFile.status === 'processing' ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                Regenerate Summary
+                {selectedFile.status === 'processing' ? 'Generating...' : 'Regenerate Summary'}
               </button>
             </div>
           </header>
