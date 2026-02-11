@@ -18,71 +18,76 @@ export async function POST(req: Request) {
     }
     console.log(`API Key loaded (first 4 chars): ${apiKey.substring(0, 4)}***`);
 
-    const { fileUrl, fileType, language, customPrompt } = await req.json();
-
-    if (!fileUrl) {
-      return NextResponse.json({ error: 'File URL is required' }, { status: 400 });
-    }
-
-    console.log(`Downloading file from: ${fileUrl}`);
-
-    // Download the file
-    const response = await fetch(fileUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${response.statusText}`);
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const { fileUrl, fileType, language, customPrompt, content, mode } = await req.json();
 
     let contentToSummarize = '';
 
-    if (fileType === 'pdf' || fileUrl.toLowerCase().endsWith('.pdf')) {
-      try {
-        const pdfParser = new PDFParser();
+    // If direct content is provided (e.g. from a specific page), use it
+    if (content) {
+      console.log('Using provided direct content for summary');
+      contentToSummarize = content;
+    } 
+    else if (fileUrl) {
+      console.log(`Downloading file from: ${fileUrl}`);
 
-        contentToSummarize = await new Promise((resolve, reject) => {
-          pdfParser.on("pdfParser_dataError", (errData: { parserError: Error }) => reject(errData.parserError));
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
-            // Debug: Print structure to help troubleshoot
-            // console.log('PDF Data Structure Keys:', Object.keys(pdfData));
-            
-            // Handle different structure variations
-            const root = pdfData.formImage || pdfData;
-            
-            if (!root || !root.Pages) {
-              console.error('Unexpected PDF JSON structure:', JSON.stringify(pdfData).substring(0, 200));
-              reject(new Error('Unexpected PDF parsed structure: Pages not found'));
-              return;
-            }
+      // Download the file
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
-            // Extract text from the parsed JSON structure
+      if (fileType === 'pdf' || fileUrl.toLowerCase().endsWith('.pdf')) {
+        try {
+          const pdfParser = new PDFParser();
+  
+          contentToSummarize = await new Promise((resolve, reject) => {
+            pdfParser.on("pdfParser_dataError", (errData: { parserError: Error }) => reject(errData.parserError));
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const text = root.Pages.map((page: any) => 
+            pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+              // Debug: Print structure to help troubleshoot
+              // console.log('PDF Data Structure Keys:', Object.keys(pdfData));
+              
+              // Handle different structure variations
+              const root = pdfData.formImage || pdfData;
+              
+              if (!root || !root.Pages) {
+                console.error('Unexpected PDF JSON structure:', JSON.stringify(pdfData).substring(0, 200));
+                reject(new Error('Unexpected PDF parsed structure: Pages not found'));
+                return;
+              }
+  
+              // Extract text from the parsed JSON structure
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              page.Texts.map((t: any) => {
-                try {
-                  return decodeURIComponent(t.R[0].T);
-                } catch (e) {
-                  // If decoding fails, return the raw text or a placeholder
-                  return t.R[0].T;
-                }
-              }).join(" ")
-            ).join("\n");
-            
-            resolve(text);
+              const text = root.Pages.map((page: any) => 
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                page.Texts.map((t: any) => {
+                  try {
+                    return decodeURIComponent(t.R[0].T);
+                  } catch (e) {
+                    // If decoding fails, return the raw text or a placeholder
+                    return t.R[0].T;
+                  }
+                }).join(" ")
+              ).join("\n");
+              
+              resolve(text);
+            });
+  
+            // Parse the buffer directly
+            pdfParser.parseBuffer(buffer);
           });
-
-          // Parse the buffer directly
-          pdfParser.parseBuffer(buffer);
-        });
-      } catch (e) {
-        console.error('PDF Parse Error:', e);
-        throw new Error('Failed to parse PDF content');
+        } catch (e) {
+          console.error('PDF Parse Error:', e);
+          throw new Error('Failed to parse PDF content');
+        }
+      } else {
+        // Assume text or try to read as text
+        contentToSummarize = buffer.toString('utf-8');
       }
     } else {
-      // Assume text or try to read as text
-      contentToSummarize = buffer.toString('utf-8');
+       return NextResponse.json({ error: 'Either fileUrl or content is required' }, { status: 400 });
     }
 
     if (!contentToSummarize || contentToSummarize.trim().length === 0) {
@@ -96,30 +101,41 @@ export async function POST(req: Request) {
       contentToSummarize = contentToSummarize.substring(0, maxLength) + '... (truncated)';
     }
 
-    console.log(`Sending content to GitHub Models (length: ${contentToSummarize.length})`);
+    console.log(`Sending content to GitHub Models (length: ${contentToSummarize.length}, mode: ${mode})`);
 
-    let systemPrompt = "You are a professional document summary analyst. Your task is to read the document content provided by the user and output a concise, professional, and actionable summary.\n\n" +
-      "Requirements:\n" +
-      "- Retain only key facts and conclusions; avoid redundancy and colloquialisms.\n" +
-      "- Prioritize summarizing: purpose/background, core points, important data or conclusions, impacts and recommendations (if mentioned).\n" +
-      "- Do not add information not mentioned in the document; do not make unfounded speculations.\n" +
-      "- If the information is insufficient to form a summary, list the missing information first.\n\n";
+    let systemPrompt = "";
+
+    if (mode === 'qa') {
+      systemPrompt = "You are a concise and professional document assistant. Your task is to answer the user's specific question based STRICTLY on the provided document content.\n\n" +
+        "Requirements:\n" +
+        "- Be direct and concise.\n" +
+        "- Use professional tone.\n" +
+        "- Only answer based on the provided text. If the answer is not in the text, state that clearly.\n" +
+        "- Do NOT provide a summary unless explicitly asked.\n\n";
+    } else {
+      systemPrompt = "You are a professional document summary analyst. Your task is to read the document content provided by the user and output a comprehensive, detailed, and structured summary.\n\n" +
+        "Requirements:\n" +
+        "- Provide a thorough analysis of the document content.\n" +
+        "- Structure the summary with clear headings (Executive Summary, Key Findings, Detailed Analysis, Conclusion).\n" +
+        "- Capture all important details, data points, and arguments.\n" +
+        "- Prioritize depth over brevity, but maintain clarity.\n" +
+        "- Do not add information not mentioned in the document; do not make unfounded speculations.\n\n";
+    }
 
     if (customPrompt && customPrompt.trim().length > 0) {
-      systemPrompt += `Additional User Instructions (Please prioritize these):\n${customPrompt}\n\n`;
+      systemPrompt += `User Instructions/Question (Please prioritize these):\n${customPrompt}\n\n`;
     }
 
     if (language && language !== 'English') {
-      systemPrompt += `Language Requirement:\nPlease output the summary strictly in ${language}.\n\n`;
+      systemPrompt += `Language Requirement:\nPlease output the result strictly in ${language}.\n\n`;
     }
 
     systemPrompt += "Format Requirements:\n" +
       "Please output in JSON format with the following structure:\n" +
       "{\n" +
-      "  \"summary\": \"The markdown formatted summary content including Title, Executive Summary, Key Points, Conclusion...\",\n" +
-      "  \"keywords\": [\"Keyword1\", \"Keyword2\", \"Keyword3\", \"Keyword4\", \"Keyword5\"]\n" +
-      "}\n" +
-      "Ensure the 'summary' field contains the full markdown summary as previously requested.";
+      "  \"summary\": \"The markdown formatted content (either the summary or the answer to the question)\",\n" +
+      "  \"keywords\": [\"Keyword1\", \"Keyword2\"] (Optional for Q&A mode)\n" +
+      "}\n";
 
     const completion = await client.chat.completions.create({
       messages: [
@@ -132,7 +148,7 @@ export async function POST(req: Request) {
       model: "gpt-4o-mini", 
       response_format: { type: "json_object" },
       temperature: 0.3,
-      max_tokens: 1500,
+      max_tokens: 4000,
       top_p: 1
     });
 

@@ -246,6 +246,58 @@ export default function Home() {
     }
   };
 
+  const handleAnalyzeContent = async (content: string, originalFile: DocumentFile) => {
+    if (!originalFile) return;
+
+    // Optimistically update status
+    const updateStatus = (status: 'processing' | 'ready' | 'error', summary?: string) => {
+      setFiles(prev => prev.map(f => f.id === originalFile.id ? { ...f, status, summary } : f));
+      if (selectedFile?.id === originalFile.id) {
+        setSelectedFile(prev => prev ? { ...prev, status, summary } : null);
+      }
+    };
+
+    updateStatus('processing');
+
+    try {
+      // Call API with direct content
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content, // Send direct content
+          fileType: originalFile.type,
+          language: aiSettings.language,
+          customPrompt: `(Analyze based on this page content only) ${aiSettings.customPrompt}`, // Hint context
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze page');
+      }
+
+      // We do NOT update the database for page analysis to preserve the original file summary?
+      // Or maybe we should? The user might want to save this analysis.
+      // For now, let's update the UI but NOT the database to avoid overwriting the full document summary permanently
+      // unless the user explicitly wants to save.
+      // However, the current UI is tied to 'files' state which is fetched from DB.
+      // If I don't update DB, a refresh will lose it.
+      // Given "autonomous pair programmer", I'll choose to NOT update DB to prevent data loss of full summary.
+      // I will only update the local state to show the result.
+      
+      updateStatus('ready', `**Page Analysis:**\n\n${data.summary}`);
+      
+    } catch (error: unknown) {
+      console.error('Page analysis failed:', error);
+      updateStatus('error', 'Failed to analyze page. Please try again.');
+      alert('Page analysis failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
       <Sidebar 
@@ -260,6 +312,7 @@ export default function Home() {
       <MainContent 
         selectedFile={selectedFile}
         onGenerateSummary={handleGenerateSummary}
+        onAnalyzeContent={handleAnalyzeContent}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
       
