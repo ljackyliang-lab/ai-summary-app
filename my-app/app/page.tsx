@@ -53,6 +53,8 @@ export default function Home() {
         url: string;
         created_at: string;
         summary?: string;
+        user_notes?: string;
+        keywords?: string[];
         status: 'processing' | 'ready' | 'error';
       }) => ({
         id: item.id,
@@ -61,6 +63,8 @@ export default function Home() {
         url: item.url,
         uploadDate: new Date(item.created_at).toLocaleDateString(),
         summary: item.summary,
+        user_notes: item.user_notes,
+        keywords: item.keywords,
         status: item.status,
       }));
       setFiles(formattedFiles);
@@ -196,7 +200,11 @@ export default function Home() {
       
       const { error: dbError } = await supabase
         .from('documents')
-        .update({ summary: data.summary, status: 'ready' })
+        .update({ 
+          summary: data.summary, 
+          keywords: data.keywords,
+          status: 'ready' 
+        })
         .eq('id', file.id);
 
       if (dbError) throw dbError;
@@ -298,6 +306,28 @@ export default function Home() {
     }
   };
 
+  const handleUpdateNotes = async (fileId: string, notes: string) => {
+    try {
+      // 1. Update Database
+      const { error } = await supabase
+        .from('documents')
+        .update({ user_notes: notes })
+        .eq('id', fileId);
+
+      if (error) throw error;
+
+      // 2. Update UI
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, user_notes: notes } : f));
+      if (selectedFile?.id === fileId) {
+        setSelectedFile(prev => prev ? { ...prev, user_notes: notes } : null);
+      }
+
+    } catch (error) {
+      console.error('Failed to update notes:', error);
+      alert('Failed to update notes.');
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
       <Sidebar 
@@ -313,6 +343,7 @@ export default function Home() {
         selectedFile={selectedFile}
         onGenerateSummary={handleGenerateSummary}
         onAnalyzeContent={handleAnalyzeContent}
+        onUpdateNotes={handleUpdateNotes}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
       

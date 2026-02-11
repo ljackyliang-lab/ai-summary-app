@@ -119,7 +119,8 @@ export async function POST(req: Request) {
         "- Structure the summary with clear headings (Executive Summary, Key Findings, Detailed Analysis, Conclusion).\n" +
         "- Capture all important details, data points, and arguments.\n" +
         "- Prioritize depth over brevity, but maintain clarity.\n" +
-        "- Do not add information not mentioned in the document; do not make unfounded speculations.\n\n";
+        "- Do not add information not mentioned in the document; do not make unfounded speculations.\n" +
+        "- Extract 5-10 key concepts or topics from the document as 'keywords'.\n\n";
     }
 
     if (customPrompt && customPrompt.trim().length > 0) {
@@ -134,7 +135,7 @@ export async function POST(req: Request) {
       "Please output in JSON format with the following structure:\n" +
       "{\n" +
       "  \"summary\": \"The markdown formatted content (either the summary or the answer to the question)\",\n" +
-      "  \"keywords\": [\"Keyword1\", \"Keyword2\"] (Optional for Q&A mode)\n" +
+      "  \"keywords\": [\"Keyword1\", \"Keyword2\"] (Required list of 5-10 extracted keywords strings)\n" +
       "}\n";
 
     const completion = await client.chat.completions.create({
@@ -148,13 +149,38 @@ export async function POST(req: Request) {
       model: "gpt-4o-mini", 
       response_format: { type: "json_object" },
       temperature: 0.3,
-      max_tokens: 4000,
+      max_tokens: 3000,
       top_p: 1
     });
 
-    const result = JSON.parse(completion.choices[0].message.content || "{}");
-    const summary = result.summary;
-    const keywords = result.keywords || [];
+    const rawContent = completion.choices[0].message.content || "{}";
+    let result;
+    
+    try {
+      result = JSON.parse(rawContent);
+    } catch (parseError) {
+      console.warn('JSON Parse failed, attempting to recover truncated JSON:', parseError);
+      // Fallback: try to manually extract content if JSON is malformed/truncated
+      result = extractContentFromMalformedJson(rawContent);
+    }
+
+    const summary = result.summary || "Summary generation failed (could not parse output).";
+    let keywords = result.keywords || [];
+
+    // Sanitize keywords: flatten and split if necessary
+    if (Array.isArray(keywords)) {
+      keywords = keywords.flatMap((k: string) => {
+        if (typeof k === 'string' && k.includes(',')) {
+          return k.split(',').map(s => s.trim());
+        }
+        return k;
+      });
+    } else if (typeof keywords === 'string') {
+      // If AI returns a single string instead of an array
+      keywords = (keywords as string).split(',').map(s => s.trim());
+    }
+
+    console.log('AI Response Keywords (Sanitized):', keywords);
 
     return NextResponse.json({ summary, keywords });
 
@@ -163,4 +189,69 @@ export async function POST(req: Request) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
+}
+
+// Helper to rescue malformed/truncated JSON
+function extractContentFromMalformedJson(raw: string): { summary: string, keywords: string[] } {
+  let summary = "";
+  let keywords: string[] = [];
+
+  try {
+    // 1. Try to extract "summary": "..."
+    // This is a basic regex that looks for the summary field. 
+    // It assumes the summary value starts with " and captures until the next field or end of string.
+    // We try to handle escaped quotes roughly.
+    const summaryMatch = raw.match(/"summary"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"keywords"|"\s*}$|$)/);
+    
+    if (summaryMatch) {
+      summary = summaryMatch[1];
+    } else {
+      // Fallback: if we can't find the structure, strip the JSON braces if they exist
+      // and assume the rest is the summary.
+      // Remove opening {"summary": " and closing "}
+      summary = raw
+        .replace(/^\s*\{\s*"summary"\s*:\s*"/, '')
+        .replace(/"\s*}\s*$/, '')
+        .replace(/"\s*,\s*"keywords".*$/, ''); // Remove keywords part if it exists at the end
+    }
+
+    // 2. Try to extract keywords
+    const keywordsMatch = raw.match(/"keywords"\s*:\s*\[([\s\S]*?)\]/);
+    if (keywordsMatch) {
+      const keywordsString = keywordsMatch[1];
+      // Basic CSV split for "key1", "key2"
+      keywords = keywordsString
+        .split(',')
+        .map(k => k.trim().replace(/^"|"$/g, '').replace(/^'|'$/g, ''))
+        .filter(k => k.length > 0);
+    }
+
+    // Clean up summary string (replace escaped newlines/quotes if it was partially parsed)
+    // JSON strings have escaped chars like \n, \", etc.
+    // If we extracted via Regex, we might still have them.
+    try {
+      // Try to decode it as a JSON string if it's wrapped in quotes
+      // But if it's truncated, JSON.parse(`"${summary}"`) might fail.
+      // So we do manual unescaping for common chars.
+      summary = summary
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .replace(/\\t/g, '\t');
+    } catch (e) {
+      // ignore
+    }
+
+    if (summary.length === 0 && raw.length > 0) {
+        summary = raw; // Ultimate fallback
+    }
+    
+    // Append a note that it might be truncated
+    summary += "\n\n*(Note: The generated summary may be incomplete due to length limits.)*";
+
+  } catch (e) {
+    console.error('Failed to extract content from malformed JSON:', e);
+    summary = "Error parsing generated summary.";
+  }
+
+  return { summary, keywords };
 }

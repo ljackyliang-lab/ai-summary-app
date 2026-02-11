@@ -5,6 +5,7 @@ export interface DocumentFile {
   url: string; // URL for preview
   uploadDate: string;
   summary?: string; // AI summary content
+  user_notes?: string; // User's personal notes
   keywords?: string[]; // Extracted keywords
   status: 'processing' | 'ready' | 'error';
 }
