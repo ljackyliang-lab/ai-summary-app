@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-// @ts-expect-error pdf-parse type definition issue
-import pdf from 'pdf-parse';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFParser = require("pdf2json");
 
 const client = new OpenAI({
   baseURL: "https://models.inference.ai.azure.com",
@@ -37,8 +38,44 @@ export async function POST(req: Request) {
 
     if (fileType === 'pdf' || fileUrl.toLowerCase().endsWith('.pdf')) {
       try {
-        const data = await pdf(buffer);
-        contentToSummarize = data.text;
+        const pdfParser = new PDFParser();
+
+        contentToSummarize = await new Promise((resolve, reject) => {
+          pdfParser.on("pdfParser_dataError", (errData: { parserError: Error }) => reject(errData.parserError));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+            // Debug: Print structure to help troubleshoot
+            // console.log('PDF Data Structure Keys:', Object.keys(pdfData));
+            
+            // Handle different structure variations
+            const root = pdfData.formImage || pdfData;
+            
+            if (!root || !root.Pages) {
+              console.error('Unexpected PDF JSON structure:', JSON.stringify(pdfData).substring(0, 200));
+              reject(new Error('Unexpected PDF parsed structure: Pages not found'));
+              return;
+            }
+
+            // Extract text from the parsed JSON structure
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const text = root.Pages.map((page: any) => 
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              page.Texts.map((t: any) => {
+                try {
+                  return decodeURIComponent(t.R[0].T);
+                } catch (e) {
+                  // If decoding fails, return the raw text or a placeholder
+                  return t.R[0].T;
+                }
+              }).join(" ")
+            ).join("\n");
+            
+            resolve(text);
+          });
+
+          // Parse the buffer directly
+          pdfParser.parseBuffer(buffer);
+        });
       } catch (e) {
         console.error('PDF Parse Error:', e);
         throw new Error('Failed to parse PDF content');
