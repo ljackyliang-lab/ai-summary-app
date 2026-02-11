@@ -7,6 +7,7 @@ interface SidebarProps {
   onFileSelect: (file: DocumentFile) => void;
   onUpload: (file: File) => Promise<void>;
   onLogout: () => Promise<void>;
+  onDelete: (file: DocumentFile) => Promise<void>;
   uploading: boolean;
 }
 
@@ -16,6 +17,7 @@ export default function Sidebar({
   onFileSelect, 
   onUpload, 
   onLogout,
+  onDelete,
   uploading 
 }: SidebarProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -43,7 +45,7 @@ export default function Sidebar({
   const handleUploadClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.pdf,video/mp4';
+    input.accept = '.pdf';
     input.onchange = async (e) => {
       const target = e.target as HTMLInputElement;
       if (target.files && target.files.length > 0) {
@@ -60,7 +62,7 @@ export default function Sidebar({
           <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
-          AI DocManager
+          DocManager
         </h1>
       </div>
 
@@ -85,8 +87,8 @@ export default function Sidebar({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
             )}
-            <span className="text-sm font-medium text-gray-600">{uploading ? 'Uploading...' : 'Upload file or video'}</span>
-            <span className="text-xs text-gray-400">Supports PDF, MP4</span>
+            <span className="text-sm font-medium text-gray-600">{uploading ? 'Uploading...' : 'Upload PDF'}</span>
+            <span className="text-xs text-gray-400">Supports PDF</span>
           </div>
         </div>
       </div>
@@ -100,16 +102,12 @@ export default function Sidebar({
               <button
                 onClick={() => onFileSelect(file)}
                 className={`
-                  w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors
+                  w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors group
                   ${selectedFile?.id === file.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100 text-gray-700'}
                 `}
               >
-                <div className={`p-2 rounded-lg ${file.type === 'pdf' ? 'bg-red-100 text-red-500' : 'bg-purple-100 text-purple-500'}`}>
-                  {file.type === 'pdf' ? (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  )}
+                <div className="p-2 rounded-lg bg-red-100 text-red-500">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{file.name}</p>
@@ -118,13 +116,26 @@ export default function Sidebar({
                 {file.status === 'processing' && (
                   <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" title="Processing"></div>
                 )}
+                
+                <div 
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(file);
+                  }}
+                  title="Delete file"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
               </button>
             </li>
           ))}
         </ul>
       </div>
 
-      <div className="p-4 border-t border-gray-100">
+      <div className="p-4 border-t border-gray-100 space-y-2">
         <button
           onClick={onLogout}
           className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"

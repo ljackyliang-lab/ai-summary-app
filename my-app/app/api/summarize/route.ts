@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     }
     console.log(`API Key loaded (first 4 chars): ${apiKey.substring(0, 4)}***`);
 
-    const { fileUrl, fileType } = await req.json();
+    const { fileUrl, fileType, language, customPrompt } = await req.json();
 
     if (!fileUrl) {
       return NextResponse.json({ error: 'File URL is required' }, { status: 400 });
@@ -98,20 +98,49 @@ export async function POST(req: Request) {
 
     console.log(`Sending content to GitHub Models (length: ${contentToSummarize.length})`);
 
+    let systemPrompt = "You are a professional document summary analyst. Your task is to read the document content provided by the user and output a concise, professional, and actionable summary.\n\n" +
+      "Requirements:\n" +
+      "- Retain only key facts and conclusions; avoid redundancy and colloquialisms.\n" +
+      "- Prioritize summarizing: purpose/background, core points, important data or conclusions, impacts and recommendations (if mentioned).\n" +
+      "- Do not add information not mentioned in the document; do not make unfounded speculations.\n" +
+      "- If the information is insufficient to form a summary, list the missing information first.\n\n";
+
+    if (customPrompt && customPrompt.trim().length > 0) {
+      systemPrompt += `Additional User Instructions (Please prioritize these):\n${customPrompt}\n\n`;
+    }
+
+    if (language && language !== 'English') {
+      systemPrompt += `Language Requirement:\nPlease output the summary strictly in ${language}.\n\n`;
+    }
+
+    systemPrompt += "Format Requirements:\n" +
+      "Please output in JSON format with the following structure:\n" +
+      "{\n" +
+      "  \"summary\": \"The markdown formatted summary content including Title, Executive Summary, Key Points, Conclusion...\",\n" +
+      "  \"keywords\": [\"Keyword1\", \"Keyword2\", \"Keyword3\", \"Keyword4\", \"Keyword5\"]\n" +
+      "}\n" +
+      "Ensure the 'summary' field contains the full markdown summary as previously requested.";
+
     const completion = await client.chat.completions.create({
       messages: [
-        { role: "system", content: "You are a helpful assistant that summarizes documents. Please provide a concise, structured summary of the following content." },
+        { 
+          role: "system", 
+          content: systemPrompt
+        },
         { role: "user", content: contentToSummarize }
       ],
       model: "gpt-4o-mini", 
-      temperature: 0.5,
-      max_tokens: 1000,
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      max_tokens: 1500,
       top_p: 1
     });
 
-    const summary = completion.choices[0].message.content;
+    const result = JSON.parse(completion.choices[0].message.content || "{}");
+    const summary = result.summary;
+    const keywords = result.keywords || [];
 
-    return NextResponse.json({ summary });
+    return NextResponse.json({ summary, keywords });
 
   } catch (error: unknown) {
     console.error('Summarization error:', error);
