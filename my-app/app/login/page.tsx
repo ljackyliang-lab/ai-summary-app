@@ -47,6 +47,52 @@ export default function LoginPage() {
     }
   };
 
+  const handleTestLogin = async () => {
+    setLoading(true);
+    setMessage(null);
+    const testEmail = 'test@example.com';
+    const testPassword = 'password123';
+
+    try {
+      // 1. Try to sign in
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: testEmail,
+        password: testPassword,
+      });
+
+      if (signInError) {
+        console.log('Test login failed, trying to create test user...');
+        
+        // 2. If sign in fails, try to sign up
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: testEmail,
+          password: testPassword,
+          options: {
+            data: {
+              username: 'Test User',
+            },
+          },
+        });
+
+        if (signUpError) throw signUpError;
+        
+        // If signup was successful but no session (email confirmation required)
+        if (signUpData.user && !signUpData.session) {
+           setMessage({ text: 'Test account created but requires email confirmation. Please check inbox (or console if local).', type: 'success' });
+           return;
+        }
+      }
+
+      // If we are here, we should be logged in
+      router.push('/');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Test login failed';
+      setMessage({ text: errorMessage, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
@@ -131,6 +177,15 @@ export default function LoginPage() {
                 </svg>
               ) : null}
               {isSignUp ? 'Sign up' : 'Sign in'}
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleTestLogin}
+              disabled={loading}
+              className={`mt-3 group relative w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${loading ? 'opacity-75 cursor-not-allowed' : ''}`}
+            >
+              Test Login (Guest)
             </button>
           </div>
         </form>

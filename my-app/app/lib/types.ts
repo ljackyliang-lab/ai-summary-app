@@ -1,7 +1,7 @@
 export interface DocumentFile {
   id: string;
   name: string;
-  type: 'pdf';
+  type: 'pdf' | 'txt';
   url: string; // URL for preview
   uploadDate: string;
   summary?: string; // AI summary content

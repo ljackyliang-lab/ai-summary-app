@@ -59,7 +59,7 @@ export default function Home() {
       }) => ({
         id: item.id,
         name: item.name,
-        type: item.type,
+        type: item.type as 'pdf' | 'txt',
         url: item.url,
         uploadDate: new Date(item.created_at).toLocaleDateString(),
         summary: item.summary,
@@ -101,7 +101,7 @@ export default function Home() {
 
       console.log('Inserting document for user:', user.id);
 
-      const fileType = 'pdf';
+      const fileType = file.name.toLowerCase().endsWith('.txt') ? 'txt' : 'pdf';
       const { data: dbData, error: dbError } = await supabase
         .from('documents')
         .insert([
@@ -128,7 +128,7 @@ export default function Home() {
         const newFile: DocumentFile = {
           id: dbData.id,
           name: dbData.name,
-          type: dbData.type as 'pdf',
+          type: dbData.type as 'pdf' | 'txt',
           url: dbData.url,
           uploadDate: new Date(dbData.created_at).toLocaleDateString(),
           summary: dbData.summary,

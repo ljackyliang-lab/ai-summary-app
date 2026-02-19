@@ -40,6 +40,7 @@ export default function MainContent({ selectedFile, onGenerateSummary, onAnalyze
   const [isNotesEditing, setIsNotesEditing] = useState(false);
   const [notesContent, setNotesContent] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [textContent, setTextContent] = useState('');
 
   // Sync notes content when file changes
   React.useEffect(() => {
@@ -49,7 +50,17 @@ export default function MainContent({ selectedFile, onGenerateSummary, onAnalyze
       setNotesContent('');
     }
     setIsNotesEditing(false);
-  }, [selectedFile?.id, selectedFile?.user_notes]);
+
+    // Fetch text content for .txt files
+    if (selectedFile?.type === 'txt' || selectedFile?.name.toLowerCase().endsWith('.txt')) {
+      fetch(selectedFile.url)
+        .then(res => res.text())
+        .then(text => setTextContent(text))
+        .catch(err => console.error('Failed to load text file:', err));
+    } else {
+      setTextContent('');
+    }
+  }, [selectedFile?.id, selectedFile?.user_notes, selectedFile?.url, selectedFile?.type, selectedFile?.name]);
 
   const handleSaveNotes = async () => {
     if (!selectedFile) return;
@@ -184,8 +195,8 @@ export default function MainContent({ selectedFile, onGenerateSummary, onAnalyze
               </button>
               <button 
                 onClick={handleAnalyzePage}
-                disabled={isAnalyzingPage || selectedFile.status === 'processing'}
-                className={`px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm flex items-center gap-2 ${(isAnalyzingPage || selectedFile.status === 'processing') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isAnalyzingPage || selectedFile.status === 'processing' || selectedFile.type !== 'pdf'}
+                className={`px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm flex items-center gap-2 ${(isAnalyzingPage || selectedFile.status === 'processing' || selectedFile.type !== 'pdf') ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                 {isAnalyzingPage ? 'Analyzing...' : 'Analyze Page'}
@@ -211,6 +222,10 @@ export default function MainContent({ selectedFile, onGenerateSummary, onAnalyze
                      ref={pdfViewerRef}
                      url={selectedFile.url}
                    />
+                 ) : (selectedFile.type === 'txt' || selectedFile.name.toLowerCase().endsWith('.txt')) ? (
+                   <div className="w-full h-full overflow-auto p-8 bg-white font-mono text-sm whitespace-pre-wrap">
+                     {textContent || 'Loading text...'}
+                   </div>
                  ) : (
                    <iframe 
                      src={selectedFile.url} 
