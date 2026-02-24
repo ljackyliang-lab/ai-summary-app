@@ -18,6 +18,8 @@ You will need accounts for the following services (all have free tiers):
 - **Vercel**: Hosting platform for Next.js applications
 - **Supabase**: Open-source Firebase alternative with storage capabilities
 
+***Github repository: https://github.com/ljackyliang-lab/ai-summary-app/tree/main/my-app***
+***Vercel Deployment: https://my-eoomp9iod-ljackyliang-5760s-projects.vercel.app***
 
 ## Section 2: Create a simple Next.JS app
 

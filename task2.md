@@ -3,6 +3,9 @@ Supabase is an open-source Firebase alternative that provides developers with a 
 
 Website: https://supabase.com/
 
+***Github repository: https://github.com/ljackyliang-lab/ai-summary-app/tree/main/my-app***
+***Vercel Deployment: https://my-eoomp9iod-ljackyliang-5760s-projects.vercel.app***
+
 **Requirements**:
 - Build a document upload and file management system powered by Supabase. The backend will include API endpoints to interact with Supabse.
 - **Note:** The detailed requirement will be discussed in week 4 lecture.
