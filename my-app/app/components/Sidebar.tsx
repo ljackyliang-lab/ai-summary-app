@@ -56,7 +56,7 @@ export default function Sidebar({
   };
 
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm">
+    <div className="w-full md:w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm h-full">
       <div className="p-6 border-b border-gray-100">
         <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

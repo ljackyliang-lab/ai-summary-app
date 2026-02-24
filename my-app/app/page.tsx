@@ -329,27 +329,33 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
-      <Sidebar 
-        files={files}
-        selectedFile={selectedFile}
-        onFileSelect={handleFileSelect}
-        onUpload={uploadFile}
-        onLogout={handleLogout}
-        onDelete={handleDeleteFile}
-        uploading={uploading}
-      />
-      <MainContent 
-        selectedFile={selectedFile}
-        onGenerateSummary={handleGenerateSummary}
-        onAnalyzeContent={handleAnalyzeContent}
-        onUpdateNotes={handleUpdateNotes}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-      />
+    <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
+      <div className={`${selectedFile ? 'hidden md:flex' : 'flex'} w-full md:w-auto flex-col h-full z-10`}>
+        <Sidebar 
+          files={files}
+          selectedFile={selectedFile}
+          onFileSelect={handleFileSelect}
+          onUpload={uploadFile}
+          onLogout={handleLogout}
+          onDelete={handleDeleteFile}
+          uploading={uploading}
+        />
+      </div>
+      
+      <div className={`${!selectedFile ? 'hidden md:flex' : 'flex'} flex-1 flex-col h-full overflow-hidden`}>
+        <MainContent 
+          selectedFile={selectedFile}
+          onGenerateSummary={handleGenerateSummary}
+          onAnalyzeContent={handleAnalyzeContent}
+          onUpdateNotes={handleUpdateNotes}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onBack={() => setSelectedFile(null)}
+        />
+      </div>
       
       <SettingsModal 
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
         settings={aiSettings}
         onSave={setAiSettings}
       />

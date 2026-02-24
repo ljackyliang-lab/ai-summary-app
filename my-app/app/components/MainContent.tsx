@@ -26,11 +26,13 @@ interface MainContentProps {
   onAnalyzeContent: (content: string, originalFile: DocumentFile) => Promise<void>;
   onUpdateNotes: (fileId: string, notes: string) => Promise<void>;
   onOpenSettings: () => void;
+  onBack?: () => void;
 }
 
-export default function MainContent({ selectedFile, onGenerateSummary, onAnalyzeContent, onUpdateNotes, onOpenSettings }: MainContentProps) {
+export default function MainContent({ selectedFile, onGenerateSummary, onAnalyzeContent, onUpdateNotes, onOpenSettings, onBack }: MainContentProps) {
   const pdfViewerRef = useRef<PDFViewerHandle>(null);
   const [isAnalyzingPage, setIsAnalyzingPage] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'doc' | 'ai'>('doc');
 
   const [question, setQuestion] = useState('');
   const [isAsking, setIsAsking] = useState(false);
@@ -162,13 +164,27 @@ export default function MainContent({ selectedFile, onGenerateSummary, onAnalyze
       {selectedFile ? (
         <div className="flex-1 flex flex-col h-full">
           {/* Top toolbar */}
-          <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm z-10">
-            <div>
-              <h2 className="text-lg font-bold text-gray-800">{selectedFile.name}</h2>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span className="uppercase px-2 py-0.5 rounded bg-gray-100 border border-gray-200 text-xs font-semibold tracking-wide">{selectedFile.type}</span>
-                <span>•</span>
-                <span>{selectedFile.uploadDate}</span>
+          <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4 flex justify-between items-center shadow-sm z-10">
+            <div className="flex items-center gap-3">
+              {/* Mobile Back Button */}
+              {onBack && (
+                <button 
+                  onClick={onBack}
+                  className="md:hidden p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
+                  aria-label="Back to file list"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              )}
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 truncate max-w-[200px] md:max-w-md">{selectedFile.name}</h2>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <span className="uppercase px-2 py-0.5 rounded bg-gray-100 border border-gray-200 text-xs font-semibold tracking-wide">{selectedFile.type}</span>
+                  <span>•</span>
+                  <span>{selectedFile.uploadDate}</span>
+                </div>
               </div>
             </div>
             <div className="flex gap-2 relative z-50">
@@ -189,33 +205,56 @@ export default function MainContent({ selectedFile, onGenerateSummary, onAnalyze
               </button>
               <button 
                 onClick={() => window.open(selectedFile.url, '_blank')}
-                className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm"
+                className="px-3 py-2 md:px-4 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm"
+                title="Download"
               >
-                Download
+                <span className="hidden md:inline">Download</span>
+                <span className="md:hidden">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </span>
               </button>
               <button 
                 onClick={handleAnalyzePage}
                 disabled={isAnalyzingPage || selectedFile.status === 'processing' || selectedFile.type !== 'pdf'}
-                className={`px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm flex items-center gap-2 ${(isAnalyzingPage || selectedFile.status === 'processing' || selectedFile.type !== 'pdf') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-3 py-2 md:px-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm flex items-center gap-2 ${(isAnalyzingPage || selectedFile.status === 'processing' || selectedFile.type !== 'pdf') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="Analyze Page"
               >
                 <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                {isAnalyzingPage ? 'Analyzing...' : 'Analyze Page'}
+                <span className="hidden md:inline">{isAnalyzingPage ? 'Analyzing...' : 'Analyze Page'}</span>
               </button>
               <button 
                 onClick={() => onGenerateSummary(selectedFile)}
                 disabled={selectedFile.status === 'processing'}
-                className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 ${selectedFile.status === 'processing' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-3 py-2 md:px-4 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm flex items-center gap-2 ${selectedFile.status === 'processing' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="Regenerate Summary"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                {selectedFile.status === 'processing' ? 'Generating...' : 'Regenerate Summary'}
+                <span className="hidden md:inline">{selectedFile.status === 'processing' ? 'Generating...' : 'Regenerate'}</span>
               </button>
             </div>
           </header>
 
           {/* Content area: Left preview, Right summary */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+            
+            {/* Mobile Tab Switcher */}
+            <div className="md:hidden flex border-b border-gray-200 bg-white shrink-0">
+              <button 
+                className={`flex-1 py-3 text-sm font-medium ${mobileTab === 'doc' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
+                onClick={() => setMobileTab('doc')}
+              >
+                Document
+              </button>
+              <button 
+                className={`flex-1 py-3 text-sm font-medium ${mobileTab === 'ai' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
+                onClick={() => setMobileTab('ai')}
+              >
+                AI Summary & Chat
+              </button>
+            </div>
+
             {/* File preview area (Left) */}
-            <div className="flex-1 bg-gray-100 p-6 overflow-y-auto border-r border-gray-200 flex items-center justify-center relative">
+            <div className={`flex-1 bg-gray-100 p-2 md:p-6 overflow-y-auto border-r border-gray-200 flex items-center justify-center relative ${mobileTab === 'doc' ? 'block' : 'hidden md:flex'}`}>
               <div className="bg-white shadow-lg rounded-lg w-full max-w-4xl h-full flex flex-col overflow-hidden relative z-0">
                  {selectedFile.type === 'pdf' || selectedFile.url.toLowerCase().endsWith('.pdf') ? (
                    <PDFViewer 
@@ -237,7 +276,7 @@ export default function MainContent({ selectedFile, onGenerateSummary, onAnalyze
             </div>
 
             {/* AI Summary/Chat area (Right) */}
-            <div className="w-96 bg-white flex flex-col shadow-xl z-20">
+            <div className={`w-full md:w-96 bg-white flex flex-col shadow-xl z-20 ${mobileTab === 'ai' ? 'block flex-1' : 'hidden md:flex'}`}>
               <div className="border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white">
                 <div className="flex">
                   <button 
